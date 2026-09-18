@@ -54,15 +54,19 @@ class BubFramework:
         """
         self.workspace = Path.cwd().resolve()
         self.config_file = config_file.resolve()
-        self.plugin_manager = pluggy.PluginManager(BUB_HOOK_NAMESPACE)
-        self.plugin_manager.add_hookspecs(BubHookSpecs)
-        self._hook_runtime = HookRuntime(self.plugin_manager)
+        self._plugin_manager = pluggy.PluginManager(BUB_HOOK_NAMESPACE)
+        self._plugin_manager.add_hookspecs(BubHookSpecs)
+        self._hook_runtime = HookRuntime(self._plugin_manager)
         self._agent_hooks = AgentHooks(self._hook_runtime)
         self._plugin_status: dict[str, PluginStatus] = {}
         self._channel_router: ChannelRouter | None = None
         self._tape_store: TapeStore | AsyncTapeStore | None = None
         self._steering_inbox: SteeringInbox | None = None
         configure.load(self.config_file)
+
+    @property
+    def plugin_manager(self) -> pluggy.PluginManager:
+        return self._plugin_manager
 
     def load_builtin_hooks(self) -> None:
         """Load Bub's builtin hook implementations."""
@@ -71,7 +75,7 @@ class BubFramework:
         impl = BuiltinImpl(self)
 
         try:
-            self.plugin_manager.register(impl, name="builtin")
+            self._plugin_manager.register(impl, name="builtin")
         except Exception as exc:
             self._plugin_status["builtin"] = PluginStatus(is_success=False, detail=str(exc))
         else:
@@ -101,7 +105,7 @@ class BubFramework:
             try:
                 if callable(plugin):  # Support entry points that are classes
                     plugin = plugin(self)
-                self.plugin_manager.register(plugin, name=plugin_name)
+                self._plugin_manager.register(plugin, name=plugin_name)
             except Exception as exc:
                 logger.warning(f"Failed to initialize plugin '{plugin_name}': {exc}")
                 self._plugin_status[plugin_name] = PluginStatus(is_success=False, detail=str(exc))
